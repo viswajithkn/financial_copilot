@@ -15,7 +15,8 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langsmith import traceable
-from statement_rag import build_chroma_filter, format_context
+from semanticLayer import build_chroma_filter
+from statement_rag import format_context
 
 unsafe_http_client = httpx.Client(verify=False)
 
@@ -81,15 +82,60 @@ TRANSACTION_RAG_PROMPT = ChatPromptTemplate.from_template("""
 
     Never estimate totals from retrieved documents.
 
-    Only identify:
-    - merchants
-    - categories
-    - concepts
-    - subscriptions
-    - semantic groupings
+    You may:
+
+    - identify merchants
+    - identify categories
+    - identify subscriptions
+    - identify locations mentioned in merchant names
+    - identify locations mentioned in transaction descriptions
+    - identify recurring destinations
+    - identify activities associated with merchants
+    - make simple evidence-based inferences directly supported by the retrieved context
+
+    Examples:
+
+    Merchant:
+    KUMON OF CUPERTINO LEARNING CENTER
+
+    Valid Answer:
+    You appear to go to Cupertino for Kumon.
+
+    Merchant:
+    BERKELEY CHESS SCHOOL
+
+    Valid Answer:
+    You appear to go to Berkeley for chess activities.
+
+    Merchant:
+    AUTOCAMP ZION
+
+    Valid Answer:
+    You appear to travel to Zion.
+
+    These are considered evidence-based extractions, not inventions.
 
     All calculations must be delegated to SQLite.                                                                                                                  
 
+    LOCATION EXTRACTION RULE
+
+    Information may be embedded inside merchant names
+    or transaction descriptions.
+
+    Examples:
+
+    "KUMON OF CUPERTINO LEARNING CENTER"
+    → Cupertino
+
+    "BERKELEY CHESS SCHOOL"
+    → Berkeley
+
+    "AUTOCAMP ZION"
+    → Zion
+
+    Extracting a location from a merchant name or description
+    is considered retrieval, not invention.
+                                                          
     Rules:
 
     1. Use only the supplied context.
@@ -99,7 +145,7 @@ TRANSACTION_RAG_PROMPT = ChatPromptTemplate.from_template("""
 
     4. Be concise and factual.
     5. If multiple accounts or statement periods are present,
-    mention them explicitly.
+    mention them explicitly.                                                                                                              
 
     Context:
     {context}

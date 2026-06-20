@@ -1,11 +1,9 @@
 import json
 from route import route_question
-from llmRouter import LLMRouter
+from llmRouter import sharedRouter as router
 
 def run_interactive_test():
     # Initialize the router once
-    print("🤖 Initializing LLM Router...")
-    router = LLMRouter()
     
     print("\n==============================================")
     print("🏦 Financial Analytics System - Interactive Test")
@@ -30,7 +28,7 @@ def run_interactive_test():
         
         # 3. Test the full execution against your SQLite and Vector DBs
         try:
-            results = route_question(question)
+            results = route_question(question,router.memory)
             
             print("\n📊 Step 3: Final Results:")
             if not results:

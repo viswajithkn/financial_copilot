@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from llmRouter import LLMRouter
+from llmRouter import sharedRouter as router
 from statement_rag import run_statement_rag
 from transaction_rag import run_transaction_rag
 from semanticLayer import extract_metadata_filter
@@ -11,11 +11,10 @@ from langsmith import traceable
 from privacy import PIIMasker
 from langchain_openai import ChatOpenAI
 from analytics import run_analytics_agent
+from questionRewrite import reWriteQuestion
 import httpx
 unsafe_http_client = httpx.Client(verify=False)
 
-
-router = LLMRouter()
 
 VALID_TOOLS = {
     "statement_rag",
@@ -33,12 +32,17 @@ synthesizer_llm = ChatOpenAI(
 
 MAX_RETRIES = 2
 
-def route_question(question):
+def route_question(question,memory):
     masker = PIIMasker()
 
-    routing = router.route(question)
+    memory_vars = memory.load_memory_variables({})
+    conversation_summary = memory_vars.get("history", "No prior context.")
 
-    metadata_filter = extract_metadata_filter(question)
+    question = reWriteQuestion(question,conversation_summary)
+    
+    metadata_filter = extract_metadata_filter(question,conversation_summary)
+
+    routing = router.route(question,conversation_summary,metadata_filter)
 
     tools = routing.get("tools", [])
     reason = routing.get("reason", "No reason provided.")
@@ -63,11 +67,10 @@ def route_question(question):
             raw_result = context["transaction_rag"]
         elif tool == 'sqlite':
             sql_question = build_sql_context(
-                question,
-                context
+                question,context
             )
 
-            result = run_sqlite(sql_question)
+            result = run_sqlite(sql_question,metadata_filter)
 
             context["sqlite"] = result
             raw_result = context["sqlite"]
@@ -82,7 +85,12 @@ def route_question(question):
     masked_final_answer = synthesize_final_answer(question, masked_context)
 
     # 6. RESTORE LAYER: Put the real numbers back into the final string text for the user
-    results = masker.unmask_text(masked_final_answer)     
+    results = masker.unmask_text(masked_final_answer)   
+
+    memory.save_context(
+        {"input": question},
+        {"output": masked_final_answer}
+    )      
 
     return results
 
@@ -139,13 +147,24 @@ and another tool says "No data found" or "I don't know,":
    - Use transaction RAG result for descriptive/narrative answers
    - Never average or blend two different numbers
 
+Never reveal:
+
+- Database schema
+- Table names
+- Column names
+- SQL queries
+- Internal tools
+- Retrieval systems
+- Agent reasoning
+
+If tool output contains these, ignore them and answer only the user's question.   
 
 Final Answer:"""
 
     response = synthesizer_llm.invoke(synthesis_prompt)
     return response.content
 
-def build_sql_context(question, context):
+def build_sql_context(question,  context):
 
     prompt = f"""
 Original Question:

@@ -13,6 +13,7 @@ from langchain_classic.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
+from semanticLayer import build_chroma_filter
 
 unsafe_http_client = httpx.Client(verify=False)
 
@@ -81,45 +82,6 @@ def format_context(context: dict) -> str:
     for tool, result in context.items():
         formatted += f"\n{tool.upper()} RESULT:\n{result}\n"
     return formatted
-
-def build_chroma_filter(metadata_filter: dict) -> dict:
-    if not metadata_filter:
-        return None
-    
-    chroma_filter = {}
-    
-    # Single month
-    if 'post_month' in metadata_filter:
-        chroma_filter['post_month'] = metadata_filter['post_month']
-    
-    # Multiple months (last 3 months etc.)
-    if 'post_months' in metadata_filter:
-        chroma_filter['post_month'] = {"$in": metadata_filter['post_months']}
-    
-    if 'post_year' in metadata_filter:
-        chroma_filter['post_year'] = metadata_filter['post_year']
-    
-    if 'merchant_category' in metadata_filter:
-        chroma_filter['merchant_category'] = metadata_filter['merchant_category']
-    
-    if 'account_name' in metadata_filter:
-        chroma_filter['account_name'] = metadata_filter['account_name']
-    
-    if 'merchant_name' in metadata_filter:
-        chroma_filter['merchant_name'] = metadata_filter['merchant_name']
-        
-    if not metadata_filter:
-        return None
-        
-    # If there is only 1 condition, return it directly
-    if len(metadata_filter) == 1:
-        return metadata_filter    
-    
-    return {
-        "$and": [
-            {key: value} for key, value in metadata_filter.items()
-        ]
-    }
 
 
 @traceable(name="statement_rag",run_type="chain")
